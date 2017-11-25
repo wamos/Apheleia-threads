@@ -20,7 +20,7 @@ cd build && make test
 or
 
 ~~~
-build/test/testfoo/testfoo
+build/test/testsockets/testsockets
 ~~~
 
 ## Credits
