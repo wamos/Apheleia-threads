@@ -175,12 +175,15 @@ void Socket::tcpConnect( const std::string& serverAddress, const std::string& se
   }
 
   // Set the TCP send buffer size
-  if (socketBufferSize > 0 && setsockopt(
+  /*if (socketBufferSize > 0 && setsockopt(
         fd, SOL_SOCKET, SO_SNDBUF, (char *)&socketBufferSize,
         sizeof(socketBufferSize))) {
     //printf("setsocktopt SO_SNDBUF  with size %" PRIu64 "failed with status %d: %s", socketBufferSize, errno, strerror(errno));
 	exit(1);
-  }
+  }*/
+
+  //int set = 1;
+  //setsockopt(fd, SOL_SOCKET, SO_NOSIGNA, (void *)&set, sizeof(int));
 
   // Try to connect to the address some number of times before giving up.
   uint32_t retries = 0;
@@ -230,8 +233,37 @@ void Socket::tcpClose() {
 }
 
 uint64_t Socket::tcpSend(uint8_t *buffer, uint64_t buf_size) {
-  ssize_t numBytes = send(fd, buffer, buf_size, MSG_DONTWAIT);
-  return numBytes;
+  int64_t totalBytes = 0;
+  int64_t  recv_size  = buf_size;
+  uint8_t* recvBuffer;
+  int64_t numBytes;
+  while(recv_size > 0){
+    recvBuffer = (uint8_t*) (buffer + totalBytes);
+    numBytes = send(fd, recvBuffer, recv_size, MSG_DONTWAIT);
+
+    if(numBytes > 0){
+      totalBytes = totalBytes + numBytes;
+      recv_size = recv_size - numBytes;
+      //printf("%p <- %p + %" PRId64 "\n", recvBuffer, buffer, numBytes);
+    }
+    else{
+    //printf("send() error %d: %s", errno, strerror(errno));   
+      //errno ==11 -> Resource temporarily unavailable
+      if (errno == 11) 
+        continue; 
+      else
+        printf("send() error %d: %s\n", errno, strerror(errno)); 
+        break;
+    } 
+
+  }
+  //ssize_t numBytes = recv(fd, buffer, buf_size, MSG_DONTWAIT);
+  if(totalBytes > 0){
+    return (uint64_t) totalBytes;
+  }
+  else{
+    return 0;
+  } 
 }
 
 uint64_t Socket::tcpReceive(uint8_t* buffer, uint64_t buf_size) {

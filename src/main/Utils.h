@@ -13,6 +13,7 @@ typedef struct {
 	uint64_t bytesProduced;
 	uint64_t thread_time;
 	uint64_t op_time;
+	std::vector<uint64_t> bytes_stats;
 } system_stats;
 
 /*

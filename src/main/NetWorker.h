@@ -16,6 +16,7 @@
 #include "BufferPool.h"
 #include "Socket.h"
 #include "Utils.h"
+#include "Worker.h"
 
 /*typedef struct {
 	uint64_t packetsConsumed;
@@ -27,59 +28,29 @@
 } system_stats;*/
 
 
-class NetWorker{
+class NetWorker: public Worker{
 
-	public:
+public:
 	NetWorker(uint64_t id, const std::string& name);
-	virtual ~NetWorker();
+	~NetWorker();
 
-	system_stats* threadStart(const std::string& stage);
+	void threadStart(const std::string& stage);
 	void sendLoop();
 	void receiveLoop();
 
-	void setQueue(SafeQueue* queue_ptr);
-	void setBufferPool(BufferPool* bufpl_ptr);
 	void setSocket(Socket* sock_ptr);
-	void getBufferFromPool(); // in terms of buffers
-	bool pushBufferToQueue(); // in terms of buffers
-	void getBufferFromQueue(); // in terms of buffers
-	bool pushBufferToPool();
-	uint64_t getBytesConsumed();
-	uint64_t getBytesProduced();
-	system_stats* getStats();
-	void threadStop();
-	void threadJoin();
 	uint64_t getNanoSecond(struct timespec tp);
-	void allocCycleStats(uint64_t size, const std::string& name);
-	std::vector<uint64_t> getLeftStats();
-	std::vector<uint64_t> getRightStats();
-
-	//virtual Logger* startIntervalLogger();		
-
-	private:
+	void allocStepStats(uint64_t size);
+	std::vector<uint64_t> getStepStats();
+		
+private:
 	Socket* tcp_socket;
 	std::string server_IP;
 	std::string client_IP;
-
-	const uint64_t worker_id;
-	std::thread the_thread;
-	std::string worker_name;
-	std::string worker_stage;
-	system_stats* stats;
 	/*---------------------*/
-	std::vector<uint64_t> left_stats;
-	std::vector<uint64_t> right_stats;
-	uint64_t start_time;
-	/*--------------------*/
-	bool stop_thread;
-	SafeQueue* queue;
-	BufferPool* bufpl;
-	BaseBuffer* WorkerBuffer;
-	void writeBuffer();
-	void cleanBuffer();
-
-    std::mutex sock_mutex;
-    std::condition_variable sock_cond;
+    std::vector<uint64_t> step_stats;
+    uint64_t start_time;
+    /*--------------------*/
 };
 
 #endif //NET_WORKER_H

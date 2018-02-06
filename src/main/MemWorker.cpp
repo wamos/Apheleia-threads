@@ -9,14 +9,10 @@
 //http://thispointer.com/c11-how-to-use-stdthread-as-a-member-variable-in-class/
 //https://rafalcieslak.wordpress.com/2014/05/16/c11-stdthreads-managed-by-a-designated-class/
 MemWorker::MemWorker(uint64_t wid, const std::string& name_)
-:worker_id(wid),
-worker_name(name_),
-bytesConsumed(0),
-bytesProduced(0),
-the_thread()
+:Worker(wid, name_)
 {
-	stop_thread = false;
-	stats = (system_stats*)malloc(sizeof(system_stats));
+	//stop_thread = false;
+	//stats = (system_stats*)malloc(sizeof(system_stats));
 }
 //source_thread(),
 //sink_thread()
@@ -26,7 +22,7 @@ MemWorker::~MemWorker(){
 	stop_thread = true;
 }
 
-void MemWorker::threadStop(){
+/*void MemWorker::threadStop(){
 	if(the_thread.joinable()){
 		stop_thread = true;
 	}
@@ -35,13 +31,16 @@ void MemWorker::threadStop(){
 void MemWorker::threadJoin(){
 	if(the_thread.joinable())
 		the_thread.join();	
-}
+}*/
 
-system_stats* MemWorker::threadStart(const std::string& stage){
+void MemWorker::threadStart(const std::string& stage){
 	// This will start the thread. Notice move semantics!
 	std::string str1 ("source");
 	std::string str2 ("sink");
 	worker_stage=stage;
+
+	struct timespec ts;
+	start_time = MemWorker::getNanoSecond(ts);
 	/*
 	std::promise<uint64_t> p_source;
 	std::promise<uint64_t> p_sink;
@@ -61,26 +60,34 @@ system_stats* MemWorker::threadStart(const std::string& stage){
 
 void MemWorker::sourceLoop(){
 	std::cout << "sourceloop "<< "\n";
-	struct timespec ts1,ts2,ts3,ts4;
-    uint64_t thread_start, thread_end, write_start, write_end, write_interval=0; 
+	struct timespec ts1,ts2,ts3,ts4, ts5, ts6;
+    uint64_t thread_start, thread_end, write_start, write_end;
+    uint64_t pool_start, queue_end, write_interval=0; 
     thread_start = MemWorker::getNanoSecond(ts1);
     while(!stop_thread){
+    		pool_start = MemWorker::getNanoSecond(ts2);
             MemWorker::getBufferFromPool();
 			if(WorkerBuffer->getSize() > 0){
-				write_start = MemWorker::getNanoSecond(ts2);
+				write_start = MemWorker::getNanoSecond(ts3);
             	MemWorker::writeBuffer();
-            	write_end = MemWorker::getNanoSecond(ts3);
-            }
-            MemWorker::pushBufferToQueue();
+            	write_end = MemWorker::getNanoSecond(ts4);
+            	MemWorker::pushBufferToQueue();
+			queue_end = MemWorker::getNanoSecond(ts5);
+			step_stats.push_back(pool_start);	
+            step_stats.push_back(write_start);
+            step_stats.push_back(write_end);
+            step_stats.push_back(queue_end);	
 			write_interval = write_interval+ (write_end - write_start);
+            }
+
             //std::cout << "source, Pool  size:" << bufpl->getPoolSize()<<"\n";
             //std::cout << "source, Queue size:" << queue->getSize()<<"\n";
 	}
-    thread_end = MemWorker::getNanoSecond(ts4);
+    thread_end = MemWorker::getNanoSecond(ts6);
     stats->thread_time = thread_end - thread_start;
     stats->op_time = write_interval;
 
-    std::cout << "source  bytes:" << stats->bytesProduced/(1024*1024*1024) <<" GB \n";
+    /*std::cout << "source  bytes:" << stats->bytesProduced/(1024*1024*1024) <<" GB \n";
     std::cout << "source  packets:" << stats->packetsProduced<<"\n";
     std::cout << "source  overall time" << stats->thread_time/1000 <<" micro sec\n";
     std::cout << "source  writing time:"<< stats->op_time/1000 <<" micro sec\n";
@@ -89,31 +96,40 @@ void MemWorker::sourceLoop(){
     double thread_rate=(double)source_bits/(double)stats->thread_time;
     double op_rate=(double)source_bits/(double)stats->op_time;
     std::cout << "source  overall   rate:" << thread_rate <<" Gbps \n";
-    std::cout << "source  effective rate:" << op_rate <<" Gbps \n";
+    std::cout << "source  effective rate:" << op_rate <<" Gbps \n";*/
 }
 
 void MemWorker::sinkLoop(){
 	std::cout << "sinkloop "<< "\n";
-	struct timespec ts1,ts2,ts3,ts4;
-    uint64_t thread_start, thread_end, clean_start, clean_end, clean_interval=0;
+	struct timespec ts1,ts2,ts3,ts4, ts5, ts6;
+    uint64_t thread_start, thread_end, clean_start, clean_end; 
+    uint64_t queue_start, pool_end, clean_interval=0;
     thread_start = MemWorker::getNanoSecond(ts1);
     while(!stop_thread){
+    		queue_start = MemWorker::getNanoSecond(ts2);
             MemWorker::getBufferFromQueue();
 			if(WorkerBuffer->getSize() > 0){
-				clean_start = MemWorker::getNanoSecond(ts2);
+				clean_start = MemWorker::getNanoSecond(ts3);
             	MemWorker::cleanBuffer();
-            	clean_end = MemWorker::getNanoSecond(ts3);
-            }
-            MemWorker::pushBufferToPool();
-			clean_interval = clean_interval+ (clean_end - clean_start);
+            	clean_end = MemWorker::getNanoSecond(ts4);
+				MemWorker::pushBufferToPool();
+            	pool_end = MemWorker::getNanoSecond(ts5);
+            	step_stats.push_back(queue_start);
+            	step_stats.push_back(clean_start);
+            	step_stats.push_back(clean_end);
+            	step_stats.push_back(pool_end);
+            	clean_interval = clean_interval+ (clean_end - clean_start);
+            }			
             //std::cout << "sink, Pool  size:" << bufpl->getPoolSize()<<"\n";
             //std::cout << "sink, Queue size:" << queue->getSize()<<"\n";
 	}
-	thread_end = MemWorker::getNanoSecond(ts4);
+	thread_end = MemWorker::getNanoSecond(ts6);
     stats->thread_time = thread_end - thread_start;
     stats->op_time = clean_interval;
 }
 
+
+/*
 void MemWorker::setQueue(SafeQueue* queue_ptr){
 	queue=queue_ptr;
 }
@@ -128,9 +144,6 @@ void MemWorker::getBufferFromPool(){
 	struct timespec ts;
 	uint64_t t_pool2worker= MemWorker::getNanoSecond(ts);
 	left_stats.push_back(t_pool2worker-start_time);
-	/*if(WorkerBuffer != NULL){
-		std::cout <<"Good Buffer!"<<"\n";
-	}*/
 }
 
 bool MemWorker::pushBufferToQueue(){
@@ -154,22 +167,6 @@ bool MemWorker::pushBufferToPool(){
 	right_stats.push_back(t_worker2pool-start_time);
 }
 
-void MemWorker::writeBuffer(){
-	uint64_t buf_size = WorkerBuffer->getSize();
-	memset(WorkerBuffer->getBuffer(), 1 ,(size_t) buf_size);
-	stats->bytesProduced+=buf_size*sizeof(uint8_t);
-	stats->packetsProduced+=1;
-	//WorkerBuffer->setWritten(true);
-}
-
-void MemWorker::cleanBuffer(){
-	uint64_t buf_size = WorkerBuffer->getSize();
-	memset(WorkerBuffer->getBuffer(), 0 , (size_t) buf_size);
-	stats->bytesConsumed+=buf_size*sizeof(uint8_t);
-	stats->packetsConsumed+=1;
-	//WorkerBuffer->setWritten(false);
-}
-
 uint64_t MemWorker::getBytesConsumed(){
     return stats->bytesConsumed;
 }
@@ -181,14 +178,34 @@ uint64_t MemWorker::getBytesProduced(){
 system_stats* MemWorker::getStats(){
     return stats;
 }
+*/
+
+void MemWorker::writeBuffer(){
+	uint64_t buf_size = WorkerBuffer->getSize();
+	memset(WorkerBuffer->getBuffer(), 1 ,(size_t) buf_size);
+	stats->bytesProduced+=buf_size*sizeof(uint8_t);
+	stats->packetsProduced+=1;
+	//stats->bytes_stats.push_back(send_bytes);
+	//WorkerBuffer->setWritten(true);
+}
+
+void MemWorker::cleanBuffer(){
+	uint64_t buf_size = WorkerBuffer->getSize();
+	memset(WorkerBuffer->getBuffer(), 0 , (size_t) buf_size);
+	stats->bytesConsumed+=buf_size*sizeof(uint8_t);
+	stats->packetsConsumed+=1;
+	//WorkerBuffer->setWritten(false);
+}
 
 uint64_t MemWorker::getNanoSecond(struct timespec tp){
-	clock_gettime(CLOCK_REALTIME, &tp);
+	clock_gettime(CLOCK_MONOTONIC, &tp);
     return (1000000000) * (uint64_t)tp.tv_sec + tp.tv_nsec;
 }
 
-void MemWorker::allocCycleStats(uint64_t size, const std::string& side){
-	std::string str1 ("left");
+void MemWorker::allocStepStats(uint64_t size){
+	step_stats.reserve(size*4);
+
+	/*std::string str1 ("left");
 	std::string str2 ("right");
 
 	if(side == "left"){
@@ -199,14 +216,15 @@ void MemWorker::allocCycleStats(uint64_t size, const std::string& side){
 	}
 	else{
 		std::cout << "sth wrong" <<"\n";
-	}
+	}*/
 
 }
 
-std::vector<uint64_t> MemWorker::getLeftStats(){
-	return left_stats;
+std::vector<uint64_t> MemWorker::getStepStats(){
+	return step_stats;
 }
-std::vector<uint64_t> MemWorker::getRightStats(){
+
+/*std::vector<uint64_t> MemWorker::getRightStats(){
 	return right_stats;
-}
+}*/
 
