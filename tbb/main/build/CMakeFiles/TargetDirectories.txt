@@ -1,0 +1,4 @@
+/home/shw328/Apheleia/tbb/main/build/CMakeFiles/rebuild_cache.dir
+/home/shw328/Apheleia/tbb/main/build/CMakeFiles/tbb_recv.dir
+/home/shw328/Apheleia/tbb/main/build/CMakeFiles/edit_cache.dir
+/home/shw328/Apheleia/tbb/main/build/CMakeFiles/tbb_send.dir
